@@ -213,9 +213,10 @@
 
     <!-- 成绩弹窗 -->
     <div v-if="showResult" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl p-8 w-full max-w-md mx-4 text-center">
+      <div class="bg-white rounded-xl p-8 w-full max-w-md mx-4 text-center relative">
+        <button v-if="isExamMode" @click="showResult = false" class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         <div class="text-5xl mb-4">🎉</div>
-        <h3 class="text-2xl font-bold mb-4">{{ flashcardEnabled ? '背诵完成！' : '考试完成！' }}</h3>
+        <h3 class="text-2xl font-bold mb-4">{{ flashcardEnabled ? '背诵完成！' : (isExamMode ? '交卷完成！' : '考试完成！') }}</h3>
         <div class="text-6xl font-bold text-blue-600 mb-2">{{ result.score.toFixed(1) }}<span class="text-xl">%</span></div>
         <div class="text-gray-500 mb-6">{{ flashcardEnabled ? '记忆率' : '得分 / 满分100' }}</div>
         <div class="text-gray-600 mb-6">
@@ -226,7 +227,7 @@
             共 {{ result.total }} 题，做对 {{ result.correct }} 题
           </template>
         </div>
-        <button @click="handleBack" class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+        <button v-if="!isExamMode" @click="handleBack" class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
           返回首页
         </button>
       </div>
@@ -685,7 +686,8 @@ const handleFlashcardSubmit = () => {
   flipped.value = {}
   stopTimer()
   if (isExamMode.value) {
-    clearExamState()
+    examSubmitted.value = true
+    saveExamState()
   } else {
     clearProgress()
   }
@@ -786,13 +788,25 @@ const handleSubmit = async () => {
       // 普通考试模式：提交后仍可浏览
       try { await submitExam({...getExamSubmitData()}) } catch {}
       examSubmitted.value = true
-      // 标记所有已回答的题为 attempted
+      // 计算正确率并显示结果
+      let correctCount = 0
+      let answeredCount = 0
       for (const q of questions.value) {
-        if (hasSelectedAnswer(q) && !questionStatus.value[q.id]?.attempted) {
+        if (hasSelectedAnswer(q)) {
+          answeredCount++
           const correct = normalizeAnswer(userAnswers.value[q.id]) === normalizeAnswer(q.correct_answer)
-          questionStatus.value[q.id] = { attempted: true, correct }
+          if (correct) correctCount++
+          if (!questionStatus.value[q.id]?.attempted) {
+            questionStatus.value[q.id] = { attempted: true, correct }
+          }
         }
       }
+      result.value = {
+        score: answeredCount > 0 ? (correctCount / answeredCount) * 100 : 0,
+        total: answeredCount,
+        correct: correctCount
+      }
+      showResult.value = true
       saveExamState()
       return
     }
@@ -845,7 +859,7 @@ const handleCutQuestion = async (wrongId) => {
 }
 
 const handleBack = async () => {
-  if (examSubmitted.value) {
+  if (isExamMode.value && examSubmitted.value) {
     handleExitExam()
     return
   }
@@ -863,13 +877,29 @@ const handleBack = async () => {
 onMounted(() => {
   loadQuestions()
   document.addEventListener('keydown', handleKeydown)
+  // 考试模式防止浏览器滑动返回
+  if (isExamMode.value) {
+    history.pushState(null, '', location.href)
+    window.addEventListener('popstate', handleExamPopstate)
+  }
 })
+
+const handleExamPopstate = () => {
+  if (isExamMode.value && !examSubmitted.value) {
+    saveExamState()
+    stopTimer()
+  }
+  if (examSubmitted.value) {
+    handleExitExam()
+  }
+}
 
 onUnmounted(async () => {
   document.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('popstate', handleExamPopstate)
   stopTimer()
   if (isExamMode.value) {
-    if (!submitted.value) saveExamState()
+    saveExamState()
   } else {
     saveProgress()
     await cleanupCorrectWrongQuestions()
