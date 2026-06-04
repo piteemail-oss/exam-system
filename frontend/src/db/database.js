@@ -108,9 +108,12 @@ function createTables() {
       options TEXT NOT NULL DEFAULT '[]',
       correct_answer TEXT NOT NULL,
       analysis TEXT,
+      hidden INTEGER NOT NULL DEFAULT 0,
       create_time TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     )
   `)
+  // 兼容旧库：添加 hidden 列
+  try { db.run('ALTER TABLE question ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0') } catch {}
   db.run(`
     CREATE TABLE IF NOT EXISTS wrongquestion (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,21 +223,31 @@ export async function deleteCategory(categoryId) {
   return true
 }
 
+export function toggleQuestionHidden(questionId) {
+  const rows = db.exec('SELECT hidden FROM question WHERE id = ?', [questionId])
+  const current = rowToObject(rows)[0]?.hidden || 0
+  const newVal = current ? 0 : 1
+  db.run('UPDATE question SET hidden = ? WHERE id = ?', [newVal, questionId])
+  saveDatabase()
+  return newVal ? 1 : 0
+}
+
 // ==================== 题目 CRUD ====================
 
 export async function createQuestion(data) {
   const optionsJson = JSON.stringify(data.options || [])
   db.run(
-    'INSERT INTO question (category_id, type, content, options, correct_answer, analysis) VALUES (?,?,?,?,?,?)',
-    [data.category_id, data.type, data.content, optionsJson, data.correct_answer, data.analysis || null]
+    'INSERT INTO question (category_id, type, content, options, correct_answer, analysis, hidden) VALUES (?,?,?,?,?,?,?)',
+    [data.category_id, data.type, data.content, optionsJson, data.correct_answer, data.analysis || null, data.hidden ? 1 : 0]
   )
   const row = db.exec('SELECT * FROM question WHERE id = last_insert_rowid()')
   await saveDatabase()
   return jsonFields(rowToObject(row)[0], ['options'])
 }
 
-export function getQuestionsByCategory(categoryId, random = false, limit = null) {
+export function getQuestionsByCategory(categoryId, random = false, limit = null, includeHidden = false) {
   let sql = 'SELECT * FROM question WHERE category_id = ?'
+  if (!includeHidden) sql += ' AND hidden = 0'
   if (random) sql += ' ORDER BY RANDOM()'
   if (limit) sql += ' LIMIT ?'
   const params = [categoryId]
@@ -246,10 +259,10 @@ export function getQuestionsByCategory(categoryId, random = false, limit = null)
 // ==================== 错题 CRUD ====================
 
 export function getWrongQuestions(categoryId = null, random = false, limit = null) {
-  let sql = 'SELECT wq.* FROM wrongquestion wq'
+  let sql = 'SELECT wq.* FROM wrongquestion wq INNER JOIN question q ON wq.question_id = q.id WHERE q.hidden = 0'
   const params = []
   if (categoryId) {
-    sql += ' INNER JOIN question q ON wq.question_id = q.id WHERE q.category_id = ?'
+    sql += ' AND q.category_id = ?'
     params.push(categoryId)
   }
   if (random) {

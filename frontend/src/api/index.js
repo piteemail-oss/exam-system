@@ -5,6 +5,7 @@ import {
   deleteCategory as dbDeleteCategory,
   createQuestion as dbCreateQuestion,
   getQuestionsByCategory,
+  toggleQuestionHidden as dbToggleQuestionHidden,
   getWrongQuestions as dbGetWrongQuestions,
   cutWrongQuestion as dbCutWrongQuestion,
   cutWrongQuestionByQuestionId as dbCutWrongQuestionByQuestionId,
@@ -35,9 +36,10 @@ export const deleteCategory = wrap(dbDeleteCategory)
 
 // Question APIs
 export const createQuestion = wrap(dbCreateQuestion)
-export const getQuestions = wrap((categoryId, random = false, limit = null) =>
-  getQuestionsByCategory(categoryId, random, limit)
+export const getQuestions = wrap((categoryId, random = false, limit = null, includeHidden = false) =>
+  getQuestionsByCategory(categoryId, random, limit, includeHidden)
 )
+export const toggleQuestionHidden = wrap(dbToggleQuestionHidden)
 
 // Wrong Question APIs
 export const getWrongQuestions = wrap((categoryId = null, random = false, limit = null) =>

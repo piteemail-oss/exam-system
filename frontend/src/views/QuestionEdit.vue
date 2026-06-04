@@ -18,12 +18,27 @@
       </div>
 
       <div class="space-y-4">
-        <div v-for="(q, index) in questions" :key="q.id" class="bg-white rounded-xl shadow-sm p-6">
-          <div class="flex items-center gap-3 mb-3">
-            <span class="w-6 h-6 bg-gray-100 text-gray-500 text-xs rounded-full flex items-center justify-center">{{ index + 1 }}</span>
-            <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded">
-              {{ getQuestionTypeLabel(q.type) }}
-            </span>
+        <div v-for="(q, index) in questions" :key="q.id"
+          class="bg-white rounded-xl shadow-sm p-6"
+          :class="{ 'opacity-50': q.hidden }"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <span class="w-6 h-6 bg-gray-100 text-gray-500 text-xs rounded-full flex items-center justify-center">{{ index + 1 }}</span>
+              <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded">
+                {{ getQuestionTypeLabel(q.type) }}
+              </span>
+              <span v-if="q.hidden" class="px-2 py-1 bg-gray-100 text-gray-400 text-xs rounded">已隐藏</span>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <span class="text-xs text-gray-400">显示</span>
+              <input
+                type="checkbox"
+                :checked="!q.hidden"
+                @change="handleToggleHidden(q)"
+                class="w-4 h-4 text-blue-600 rounded"
+              />
+            </label>
           </div>
           <div class="text-gray-900 font-medium mb-3">
             {{ q.content }}
@@ -54,7 +69,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getQuestions } from '../api'
+import { getQuestions, toggleQuestionHidden } from '../api'
 
 const route = useRoute()
 const categoryId = ref(parseInt(route.params.id))
@@ -62,11 +77,20 @@ const questions = ref([])
 
 const loadQuestions = async () => {
   try {
-    const res = await getQuestions(categoryId.value)
+    const res = await getQuestions(categoryId.value, false, null, true)
     questions.value = res.data
   } catch (error) {
     console.error(error)
     questions.value = []
+  }
+}
+
+const handleToggleHidden = async (q) => {
+  try {
+    const res = await toggleQuestionHidden(q.id)
+    q.hidden = res.data
+  } catch (e) {
+    console.error('切换隐藏状态失败', e)
   }
 }
 
