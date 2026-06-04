@@ -1,39 +1,82 @@
 import initSqlJs from 'sql.js'
+import * as XLSX from 'xlsx'
 
 let SQL = null
 let db = null
-let dbPath = 'exam.db'
+const DB_NAME = 'exam-system'
+const DB_STORE = 'database'
+const DB_KEY = 'exam.db'
+
+// ==================== IndexedDB 持久化 ====================
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1)
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(DB_STORE)) {
+        request.result.createObjectStore(DB_STORE)
+      }
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function loadFromIDB() {
+  const idb = await openIDB()
+  return new Promise((resolve) => {
+    const tx = idb.transaction(DB_STORE, 'readonly')
+    const store = tx.objectStore(DB_STORE)
+    const getReq = store.get(DB_KEY)
+    getReq.onsuccess = () => {
+      idb.close()
+      resolve(getReq.result || null)
+    }
+    getReq.onerror = () => {
+      idb.close()
+      resolve(null)
+    }
+  })
+}
+
+async function saveToIDB(data) {
+  const idb = await openIDB()
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(DB_STORE, 'readwrite')
+    const store = tx.objectStore(DB_STORE)
+    store.put(data, DB_KEY)
+    tx.oncomplete = () => { idb.close(); resolve() }
+    tx.onerror = () => { idb.close(); reject(tx.error) }
+  })
+}
 
 // ==================== 初始化 ====================
-
-async function getOPFS() {
-  return await navigator.storage.getDirectory()
-}
 
 export async function initDatabase() {
   if (SQL && db) return db
 
+  // 手动加载 WASM 文件，避免 locateFile 路径解析问题
+  const wasmUrl = import.meta.env.BASE_URL + 'sql-wasm.wasm'
+  const wasmResponse = await fetch(wasmUrl)
+  if (!wasmResponse.ok) {
+    throw new Error(`无法加载 WASM 文件: ${wasmUrl} (HTTP ${wasmResponse.status})`)
+  }
+  const wasmBuffer = await wasmResponse.arrayBuffer()
+
   SQL = await initSqlJs({
-    locateFile: file => `/${file}`
+    wasmBinary: new Uint8Array(wasmBuffer)
   })
 
-  // 尝试从 OPFS 加载已有数据库
+  // 尝试从 IndexedDB 加载已有数据库
+  let loaded = false
   try {
-    const opfs = await getOPFS()
-    let fileHandle
-    try {
-      fileHandle = await opfs.getFileHandle(dbPath)
-    } catch {
-      fileHandle = null
-    }
-
-    if (fileHandle) {
-      const file = await fileHandle.getFile()
-      const buffer = await file.arrayBuffer()
-      db = new SQL.Database(new Uint8Array(buffer))
+    const saved = await loadFromIDB()
+    if (saved) {
+      db = new SQL.Database(new Uint8Array(saved))
+      loaded = true
     }
   } catch (e) {
-    console.warn('[db] 无法加载已有数据库，将创建新库', e)
+    console.warn('[db] 无法从 IndexedDB 加载数据库，将创建新库', e)
   }
 
   if (!db) {
@@ -41,6 +84,10 @@ export async function initDatabase() {
   }
 
   createTables()
+  if (!loaded) {
+    // 首次创建，写入 IndexedDB
+    try { await saveToIDB(db.export()) } catch {}
+  }
   return db
 }
 
@@ -90,16 +137,8 @@ function createTables() {
 
 export async function saveDatabase() {
   if (!db) return
-  try {
-    const data = db.export()
-    const opfs = await getOPFS()
-    const fileHandle = await opfs.getFileHandle(dbPath, { create: true })
-    const writable = await fileHandle.createWritable()
-    await writable.write(data)
-    await writable.close()
-  } catch (e) {
-    console.error('[db] 保存数据库失败', e)
-  }
+  const data = db.export()
+  await saveToIDB(data)
 }
 
 // ==================== 工具函数 ====================
@@ -129,10 +168,10 @@ function jsonFields(row, fields) {
 
 // ==================== 科目 CRUD ====================
 
-export function createCategory(name) {
+export async function createCategory(name) {
   db.run('INSERT INTO category (name) VALUES (?)', [name])
   const row = db.exec('SELECT * FROM category WHERE id = last_insert_rowid()')
-  saveDatabase()
+  await saveDatabase()
   return rowToObject(row)[0]
 }
 
@@ -167,7 +206,7 @@ export function getCategories() {
   })
 }
 
-export function deleteCategory(categoryId) {
+export async function deleteCategory(categoryId) {
   // 级联删除
   const questions = db.exec('SELECT id FROM question WHERE category_id = ?', [categoryId])
   const qIds = rowToObject(questions)
@@ -177,20 +216,20 @@ export function deleteCategory(categoryId) {
   }
   db.run('DELETE FROM examrecord WHERE category_id = ?', [categoryId])
   db.run('DELETE FROM category WHERE id = ?', [categoryId])
-  saveDatabase()
+  await saveDatabase()
   return true
 }
 
 // ==================== 题目 CRUD ====================
 
-export function createQuestion(data) {
+export async function createQuestion(data) {
   const optionsJson = JSON.stringify(data.options || [])
   db.run(
     'INSERT INTO question (category_id, type, content, options, correct_answer, analysis) VALUES (?,?,?,?,?,?)',
     [data.category_id, data.type, data.content, optionsJson, data.correct_answer, data.analysis || null]
   )
   const row = db.exec('SELECT * FROM question WHERE id = last_insert_rowid()')
-  saveDatabase()
+  await saveDatabase()
   return jsonFields(rowToObject(row)[0], ['options'])
 }
 
@@ -238,7 +277,7 @@ export function getWrongQuestions(categoryId = null, random = false, limit = nul
   })
 }
 
-export function updateWrongQuestion(questionId, userAnswer, persist = true) {
+export async function updateWrongQuestion(questionId, userAnswer, persist = true) {
   if (!userAnswer || !String(userAnswer).trim()) return null
   const existing = db.exec('SELECT * FROM wrongquestion WHERE question_id = ?', [questionId])
   const rows = rowToObject(existing)
@@ -254,26 +293,26 @@ export function updateWrongQuestion(questionId, userAnswer, persist = true) {
       [questionId, userAnswer]
     )
   }
-  if (persist) saveDatabase()
+  if (persist) await saveDatabase()
   const result = db.exec('SELECT * FROM wrongquestion WHERE question_id = ?', [questionId])
   return rowToObject(result)[0]
 }
 
-export function cutWrongQuestion(wrongId) {
+export async function cutWrongQuestion(wrongId) {
   const existing = db.exec('SELECT * FROM wrongquestion WHERE id = ?', [wrongId])
   if (rowToObject(existing).length > 0) {
     db.run('DELETE FROM wrongquestion WHERE id = ?', [wrongId])
-    saveDatabase()
+    await saveDatabase()
     return true
   }
   return false
 }
 
-export function cutWrongQuestionByQuestionId(questionId) {
+export async function cutWrongQuestionByQuestionId(questionId) {
   const existing = db.exec('SELECT * FROM wrongquestion WHERE question_id = ?', [questionId])
   if (rowToObject(existing).length > 0) {
     db.run('DELETE FROM wrongquestion WHERE question_id = ?', [questionId])
-    saveDatabase()
+    await saveDatabase()
     return true
   }
   return false
@@ -281,7 +320,7 @@ export function cutWrongQuestionByQuestionId(questionId) {
 
 // ==================== 考试 CRUD ====================
 
-export function submitExam(data) {
+export async function submitExam(data) {
   const answers = data.answers.filter(a => a.user_answer && String(a.user_answer).trim())
   const total = answers.length
   let correct = 0
@@ -300,7 +339,7 @@ export function submitExam(data) {
       // 删除错题记录
       db.run('DELETE FROM wrongquestion WHERE question_id = ?', [ans.question_id])
     } else {
-      updateWrongQuestion(ans.question_id, ans.user_answer, false)
+      await updateWrongQuestion(ans.question_id, ans.user_answer, false)
     }
   }
 
@@ -311,7 +350,7 @@ export function submitExam(data) {
     'INSERT INTO examrecord (category_id, is_wrong_mode, score, total, answers) VALUES (?,?,?,?,?)',
     [data.category_id, data.is_wrong_mode || 0, score, total, answersJson]
   )
-  saveDatabase()
+  await saveDatabase()
 
   const recordRow = db.exec('SELECT * FROM examrecord WHERE id = last_insert_rowid()')
   const record = rowToObject(recordRow)[0]
@@ -332,12 +371,12 @@ export function exportDatabase() {
 }
 
 export async function importDatabase(buffer) {
-  if (SQL) {
+  if (db) {
     db.close()
   }
   db = new SQL.Database(new Uint8Array(buffer))
-  createTables() // ensure tables exist (won't drop existing)
-  await saveDatabase()
+  createTables()
+  await saveToIDB(db.export())
   return true
 }
 
@@ -408,10 +447,10 @@ export async function importQuestions(file) {
       const data = parseImportRow(rows[i])
       let category = getCategoryByName(data.category_name)
       if (!category) {
-        createCategory(data.category_name)
+        await createCategory(data.category_name)
         category = getCategoryByName(data.category_name)
       }
-      createQuestion({
+      await createQuestion({
         category_id: category.id,
         type: data.type,
         content: data.content,
@@ -440,8 +479,21 @@ async function readImportFile(file) {
     const text = await file.text()
     return parseCSV(text)
   } else if (filename.match(/\.xlsx?$/)) {
-    // 使用简单的 CSV 回退；XLSX 支持需要额外库
-    throw new Error('暂不支持 XLSX 格式，请使用 CSV 文件')
+    const buffer = await file.arrayBuffer()
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 })
+    if (rows.length === 0) return []
+    const headers = rows[0].map(h => normalizeHeader(String(h ?? '')))
+    const dataRows = []
+    for (let i = 1; i < rows.length; i++) {
+      const row = {}
+      headers.forEach((header, index) => {
+        row[header] = rows[i]?.[index] != null ? String(rows[i][index]).trim() : ''
+      })
+      dataRows.push(row)
+    }
+    return dataRows
   } else {
     throw new Error('只支持 CSV 或 XLSX 文件')
   }
