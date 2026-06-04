@@ -109,11 +109,14 @@ function createTables() {
       correct_answer TEXT NOT NULL,
       analysis TEXT,
       hidden INTEGER NOT NULL DEFAULT 0,
+      favorite INTEGER NOT NULL DEFAULT 0,
       create_time TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     )
   `)
   // 兼容旧库：添加 hidden 列
   try { db.run('ALTER TABLE question ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0') } catch {}
+  // 兼容旧库：添加 favorite 列
+  try { db.run('ALTER TABLE question ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0') } catch {}
   db.run(`
     CREATE TABLE IF NOT EXISTS wrongquestion (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,7 +185,7 @@ export function getCategories() {
   const cats = db.exec('SELECT * FROM category ORDER BY id')
   const rows = rowToObject(cats)
   return rows.map(cat => {
-    const total = db.exec('SELECT COUNT(*) as cnt FROM question WHERE category_id = ?', [cat.id])
+    const total = db.exec('SELECT COUNT(*) as cnt FROM question WHERE category_id = ? AND hidden = 0', [cat.id])
     const totalCnt = total[0] ? total[0].values[0][0] : 0
 
     const latestExam = db.exec(
@@ -193,7 +196,7 @@ export function getCategories() {
     const correctRate = examRows.length > 0 ? (examRows[0].score || 0) : 0
 
     const wrongCnt = db.exec(
-      "SELECT COUNT(*) as cnt FROM wrongquestion WHERE question_id IN (SELECT id FROM question WHERE category_id = ?)",
+      "SELECT COUNT(*) as cnt FROM wrongquestion WHERE question_id IN (SELECT id FROM question WHERE category_id = ? AND hidden = 0)",
       [cat.id]
     )
     const wrongCount = wrongCnt[0] ? wrongCnt[0].values[0][0] : 0
@@ -230,6 +233,20 @@ export function toggleQuestionHidden(questionId) {
   db.run('UPDATE question SET hidden = ? WHERE id = ?', [newVal, questionId])
   saveDatabase()
   return newVal ? 1 : 0
+}
+
+export function toggleFavorite(questionId) {
+  const rows = db.exec('SELECT favorite FROM question WHERE id = ?', [questionId])
+  const current = rowToObject(rows)[0]?.favorite || 0
+  const newVal = current ? 0 : 1
+  db.run('UPDATE question SET favorite = ? WHERE id = ?', [newVal, questionId])
+  saveDatabase()
+  return newVal ? 1 : 0
+}
+
+export async function batchToggleHidden(categoryId, hidden) {
+  db.run('UPDATE question SET hidden = ? WHERE category_id = ?', [hidden ? 1 : 0, categoryId])
+  await saveDatabase()
 }
 
 // ==================== 题目 CRUD ====================
@@ -319,6 +336,11 @@ export async function cutWrongQuestion(wrongId) {
     return true
   }
   return false
+}
+
+export async function clearAllWrongQuestions(categoryId) {
+  db.run('DELETE FROM wrongquestion WHERE question_id IN (SELECT id FROM question WHERE category_id = ?)', [categoryId])
+  await saveDatabase()
 }
 
 export async function cutWrongQuestionByQuestionId(questionId) {

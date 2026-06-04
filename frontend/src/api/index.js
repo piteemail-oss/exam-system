@@ -6,9 +6,12 @@ import {
   createQuestion as dbCreateQuestion,
   getQuestionsByCategory,
   toggleQuestionHidden as dbToggleQuestionHidden,
+  toggleFavorite as dbToggleFavorite,
+  batchToggleHidden as dbBatchToggleHidden,
   getWrongQuestions as dbGetWrongQuestions,
   cutWrongQuestion as dbCutWrongQuestion,
   cutWrongQuestionByQuestionId as dbCutWrongQuestionByQuestionId,
+  clearAllWrongQuestions as dbClearAllWrongQuestions,
   submitExam as dbSubmitExam,
   exportDatabase,
   importDatabase,
@@ -40,6 +43,8 @@ export const getQuestions = wrap((categoryId, random = false, limit = null, incl
   getQuestionsByCategory(categoryId, random, limit, includeHidden)
 )
 export const toggleQuestionHidden = wrap(dbToggleQuestionHidden)
+export const toggleFavorite = wrap(dbToggleFavorite)
+export const batchToggleHidden = wrap(dbBatchToggleHidden)
 
 // Wrong Question APIs
 export const getWrongQuestions = wrap((categoryId = null, random = false, limit = null) =>
@@ -47,6 +52,7 @@ export const getWrongQuestions = wrap((categoryId = null, random = false, limit 
 )
 export const cutWrongQuestion = wrap(dbCutWrongQuestion)
 export const cutWrongQuestionByQuestionId = wrap(dbCutWrongQuestionByQuestionId)
+export const clearAllWrongQuestions = wrap(dbClearAllWrongQuestions)
 
 // Exam APIs
 export const submitExam = wrap(dbSubmitExam)

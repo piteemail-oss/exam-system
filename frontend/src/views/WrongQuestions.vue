@@ -4,9 +4,9 @@
       <div class="flex justify-between items-center mb-8">
         <h1 class="text-3xl font-bold text-gray-900">科目错题本</h1>
         <div class="flex gap-2">
-          <router-link :to="`/wrong-exam/${categoryId}`" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition">
-            开始错题强化
-          </router-link>
+          <button @click="handleClearAll" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+            一键清除
+          </button>
           <router-link to="/" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
             返回首页
           </router-link>
@@ -62,7 +62,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getWrongQuestions, cutWrongQuestion } from '../api'
+import { getWrongQuestions, cutWrongQuestion, clearAllWrongQuestions } from '../api'
 
 const props = defineProps(['categoryId'])
 const wrongQuestions = ref([])
@@ -70,6 +70,12 @@ const wrongQuestions = ref([])
 const loadWrongQuestions = async () => {
   const res = await getWrongQuestions(props.categoryId)
   wrongQuestions.value = res.data
+}
+
+const handleClearAll = async () => {
+  if (!confirm('确定要清除该科目下所有错题吗？此操作不可恢复。')) return
+  await clearAllWrongQuestions(props.categoryId)
+  await loadWrongQuestions()
 }
 
 const handleCut = async (id) => {

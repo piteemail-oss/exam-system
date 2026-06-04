@@ -35,6 +35,24 @@
       </div>
 
       <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4">📤 导出科目题库</h3>
+        <p class="text-gray-600 mb-4">选择一个科目，导出该科目下所有题目为 CSV 文件。</p>
+        <div class="flex gap-3 flex-wrap items-center">
+          <select v-model="exportCategoryId" class="px-4 py-2 border border-gray-300 rounded-lg text-sm">
+            <option :value="null" disabled>请选择科目</option>
+            <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}（{{ cat.question_count }} 题）</option>
+          </select>
+          <button
+            @click="handleExportCategory"
+            :disabled="!exportCategoryId"
+            class="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition disabled:opacity-50"
+          >
+            导出 CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
         <h3 class="text-lg font-semibold mb-4">📚 导入题库</h3>
         <div class="mt-6 flex flex-col md:flex-row md:items-center gap-3">
           <label class="inline-flex items-center px-6 py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition cursor-pointer">
@@ -95,13 +113,6 @@
             </div>
           </div>
 
-          <div v-if="previewErrors.length" class="mt-4 text-sm text-red-600">
-            <div class="font-medium">前 {{ previewErrors.length }} 条错误：</div>
-            <ul class="list-disc list-inside space-y-1">
-              <li v-for="err in previewErrors.slice(0, 5)" :key="err.row">第 {{ err.row }} 行：{{ err.message }}</li>
-            </ul>
-          </div>
-
           <div class="overflow-x-auto mt-4">
             <table class="min-w-full text-sm text-left border-collapse">
               <thead class="bg-slate-100 text-slate-700">
@@ -111,28 +122,24 @@
                   <th class="px-3 py-2 border border-slate-200">题型</th>
                   <th class="px-3 py-2 border border-slate-200">题干</th>
                   <th class="px-3 py-2 border border-slate-200">标准答案</th>
-                  <th class="px-3 py-2 border border-slate-200">是否有效</th>
+                  <th v-if="invalidCount === 0" class="px-3 py-2 border border-slate-200">有效</th>
                   <th class="px-3 py-2 border border-slate-200">错误信息</th>
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="row in previewRows.slice(0, 20)"
-                  :key="row.row_number"
-                  :class="row.valid ? 'bg-white' : 'bg-red-50'"
-                >
+                <tr v-for="row in displayRows" :key="row.row_number" :class="row.valid ? 'bg-white' : 'bg-red-50'">
                   <td class="px-3 py-2 border border-slate-200">{{ row.row_number }}</td>
                   <td class="px-3 py-2 border border-slate-200">{{ row.category_name || row.category_id }}</td>
                   <td class="px-3 py-2 border border-slate-200">{{ row.type }}</td>
                   <td class="px-3 py-2 border border-slate-200 truncate max-w-xs">{{ row.content }}</td>
                   <td class="px-3 py-2 border border-slate-200">{{ row.correct_answer }}</td>
-                  <td class="px-3 py-2 border border-slate-200">{{ row.valid ? '是' : '否' }}</td>
-                  <td class="px-3 py-2 border border-slate-200 text-red-600">{{ row.error }}</td>
+                  <td v-if="invalidCount === 0" class="px-3 py-2 border border-slate-200">{{ row.valid ? '是' : '否' }}</td>
+                  <td class="px-3 py-2 border border-slate-200" :class="row.valid ? '' : 'text-red-600'">{{ row.error }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p class="mt-2 text-xs text-slate-500">仅展示前 20 行预览，实际导入结果请以导入后返回为准。</p>
+          <p v-if="invalidCount === 0" class="mt-2 text-xs text-slate-500">仅展示前 20 行预览</p>
         </div>
       </div>
       <div v-if="importResult" class="bg-white rounded-xl shadow-sm p-6 mt-6">
@@ -149,6 +156,32 @@
         </div>
       </div>
 
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4">外观与音效</h3>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-gray-900">夜间模式</div>
+              <div class="text-sm text-gray-500">切换深色界面，夜间刷题不刺眼</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" :checked="darkMode" @change="toggleDarkMode" class="sr-only peer" />
+              <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-gray-900">答题音效</div>
+              <div class="text-sm text-gray-500">答对/答错时播放提示音</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" :checked="soundEnabled" @change="toggleSound" class="sr-only peer" />
+              <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div class="bg-white rounded-xl shadow-sm p-6">
         <h3 class="text-lg font-semibold mb-4">关于系统</h3>
         <p class="text-gray-600">
@@ -161,17 +194,55 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { backupDatabase, restoreDatabase, importQuestions, previewImportQuestions } from '../api'
+import { ref, computed, onMounted } from 'vue'
+import { backupDatabase, restoreDatabase, importQuestions, previewImportQuestions, getCategories, exportCategoryQuestions } from '../api'
+import { getSoundEnabled, setSoundEnabled } from '../utils/sound'
 
+const categories = ref([])
+const darkMode = ref(false)
+const soundEnabled = ref(true)
+const exportCategoryId = ref(null)
 const selectedFile = ref(null)
 const previewRows = ref([])
 const previewErrors = ref([])
 const validCount = ref(0)
 const invalidCount = ref(0)
+
+const displayRows = computed(() => {
+  if (invalidCount.value > 0) {
+    return previewRows.value.filter(r => !r.valid).slice(0, 20)
+  }
+  return previewRows.value.slice(0, 20)
+})
 const previewReady = ref(false)
 const importResult = ref(null)
 const importing = ref(false)
+
+const loadCategories = async () => {
+  try {
+    const res = await getCategories()
+    categories.value = res.data
+  } catch {}
+}
+
+const handleExportCategory = async () => {
+  if (!exportCategoryId.value) return
+  const cat = categories.value.find(c => c.id === exportCategoryId.value)
+  if (!cat) return
+  try {
+    const res = await exportCategoryQuestions(cat.id, cat.name)
+    const url = window.URL.createObjectURL(res.data.blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', res.data.filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('导出失败：' + (e.message || e))
+  }
+}
 
 const handleBackup = async () => {
   try {
@@ -314,4 +385,25 @@ const downloadInvalidRows = () => {
   link.remove()
   URL.revokeObjectURL(url)
 }
+
+const toggleDarkMode = () => {
+  darkMode.value = !darkMode.value
+  document.documentElement.classList.toggle('dark', darkMode.value)
+  localStorage.setItem('dark_mode', darkMode.value ? '1' : '0')
+}
+
+const toggleSound = () => {
+  soundEnabled.value = !soundEnabled.value
+  setSoundEnabled(soundEnabled.value)
+}
+
+onMounted(() => {
+  loadCategories()
+  // 初始化夜间模式
+  const savedDark = localStorage.getItem('dark_mode') === '1'
+  darkMode.value = savedDark
+  document.documentElement.classList.toggle('dark', savedDark)
+  // 初始化音效
+  soundEnabled.value = getSoundEnabled()
+})
 </script>
