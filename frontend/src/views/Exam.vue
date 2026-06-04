@@ -57,7 +57,7 @@
       </div>
     </div>
     <!-- 手机端：可展开答题卡 -->
-    <div class="md:hidden fixed bottom-0 left-0 right-0 z-40">
+    <div class="md:hidden fixed bottom-6 left-0 right-0 z-40" style="padding-bottom: env(safe-area-inset-bottom, 0px)">
       <div v-if="!showAnswerSheet" class="flex justify-center">
         <button
           @click="showAnswerSheet = true"
@@ -92,7 +92,7 @@
     </div>
 
     <!-- 答题区域 -->
-    <div class="max-w-2xl mx-auto p-4 pb-24 md:pb-8 md:p-8" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+    <div class="max-w-2xl mx-auto p-4 pb-20 md:pb-8 md:p-8" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
       <div v-for="(q, index) in questions" :key="q.id" v-show="currentIndex === index" class="bg-white rounded-xl shadow-sm p-6">
         <!-- 题干 -->
         <div class="text-lg font-medium text-gray-900 mb-2">

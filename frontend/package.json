@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
     "axios": "^1.6.8",
     "lucide-vue-next": "^0.363.0",
     "sql.js": "^1.14.1",
