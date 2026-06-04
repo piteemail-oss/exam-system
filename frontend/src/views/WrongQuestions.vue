@@ -19,11 +19,14 @@
       </div>
 
       <div class="space-y-4">
-        <div v-for="wq in wrongQuestions" :key="wq.id" class="bg-white rounded-xl shadow-sm p-6">
+        <div v-for="(wq, index) in wrongQuestions" :key="wq.id" class="bg-white rounded-xl shadow-sm p-6">
           <div class="flex justify-between items-start mb-3">
-            <span class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded">
-              错误 {{ wq.wrong_count }} 次
-            </span>
+            <div class="flex items-center gap-3">
+              <span class="w-6 h-6 bg-gray-100 text-gray-500 text-xs rounded-full flex items-center justify-center">{{ index + 1 }}</span>
+              <span class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded">
+                错误 {{ wq.wrong_count }} 次
+              </span>
+            </div>
             <button 
               @click="handleCut(wq.id)"
               class="text-green-500 hover:text-green-700 text-sm"
@@ -40,9 +43,8 @@
               <span 
                 class="px-2 py-1 rounded text-sm"
                 :class="{
-                  'bg-red-100 text-red-600': wq.user_answer?.includes(opt.alias),
                   'bg-green-100 text-green-600': wq.question.correct_answer?.includes(opt.alias),
-                  'text-gray-600': !wq.user_answer?.includes(opt.alias) && !wq.question.correct_answer?.includes(opt.alias)
+                  'text-gray-600': !wq.question.correct_answer?.includes(opt.alias)
                 }"
               >
                 {{ opt.text }}

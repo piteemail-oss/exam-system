@@ -1,56 +1,50 @@
 <template>
   <div class="min-h-screen bg-gray-50 p-4 md:p-8">
-    <div class="max-w-6xl mx-auto">
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <h1 class="text-3xl font-bold text-gray-900">题目列表</h1>
-          <p class="text-sm text-gray-500 mt-1">展示当前科目的所有题目内容，方便快速浏览与核对。</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <router-link to="/" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
-            返回首页
-          </router-link>
+    <div class="max-w-4xl mx-auto">
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">题目列表</h1>
+        <div class="flex gap-2">
           <button @click="loadQuestions" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
             刷新列表
           </button>
+          <router-link to="/" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
+            返回首页
+          </router-link>
         </div>
       </div>
 
-      <div class="bg-white rounded-xl shadow-sm p-6">
-        <div v-if="questions.length === 0" class="text-center py-16 text-gray-500">
-          当前科目暂无题目，请先通过“预览导入题库”导入题目。
-        </div>
+      <div v-if="questions.length === 0" class="text-center py-16 text-gray-500">
+        当前科目暂无题目，请先通过"预览导入题库"导入题目。
+      </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200 text-sm">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-4 py-3 text-left font-medium text-gray-700">ID</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-700">题型</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-700">题干</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-700">选项</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-700">正确答案</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-700">解析</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="q in questions" :key="q.id">
-                <td class="px-4 py-4 text-gray-700 align-top">{{ q.id }}</td>
-                <td class="px-4 py-4 text-gray-700 align-top">{{ getQuestionTypeLabel(q.type) }}</td>
-                <td class="px-4 py-4 text-gray-700 align-top whitespace-pre-line">{{ q.content }}</td>
-                <td class="px-4 py-4 text-gray-700 align-top">
-                  <div class="space-y-1">
-                    <div v-for="opt in q.options" :key="opt.alias" class="flex gap-2">
-                      <span class="font-medium">{{ opt.alias }}.</span>
-                      <span class="break-words">{{ opt.text }}</span>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-4 py-4 text-gray-700 align-top whitespace-pre-line">{{ q.correct_answer }}</td>
-                <td class="px-4 py-4 text-gray-700 align-top whitespace-pre-line">{{ q.analysis || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="space-y-4">
+        <div v-for="(q, index) in questions" :key="q.id" class="bg-white rounded-xl shadow-sm p-6">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="w-6 h-6 bg-gray-100 text-gray-500 text-xs rounded-full flex items-center justify-center">{{ index + 1 }}</span>
+            <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded">
+              {{ getQuestionTypeLabel(q.type) }}
+            </span>
+          </div>
+          <div class="text-gray-900 font-medium mb-3">
+            {{ q.content }}
+          </div>
+          <div class="space-y-2">
+            <div v-for="opt in q.options" :key="opt.alias" class="flex items-center gap-2">
+              <span class="w-6 font-medium">{{ opt.alias }}.</span>
+              <span
+                class="px-2 py-1 rounded text-sm"
+                :class="{
+                  'bg-green-100 text-green-600': q.correct_answer?.includes(opt.alias),
+                  'text-gray-600': !q.correct_answer?.includes(opt.alias)
+                }"
+              >
+                {{ opt.text }}
+              </span>
+            </div>
+          </div>
+          <div v-if="q.analysis" class="mt-3 text-sm text-gray-500">
+            解析：{{ q.analysis }}
+          </div>
         </div>
       </div>
     </div>
