@@ -20,7 +20,7 @@ export function playCorrectSound() {
       osc.type = 'triangle'
       osc.frequency.value = freq
       gain.gain.setValueAtTime(0, now + i * 0.08)
-      gain.gain.linearRampToValueAtTime(0.25, now + i * 0.08 + 0.02)
+      gain.gain.linearRampToValueAtTime(0.15, now + i * 0.08 + 0.02)
       gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2)
       osc.connect(gain)
       gain.connect(ctx.destination)
