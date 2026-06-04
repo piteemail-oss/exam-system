@@ -9,29 +9,33 @@
       </div>
 
       <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h3 class="text-lg font-semibold mb-4">数据备份与恢复</h3>
+        <h3 class="text-lg font-semibold mb-4">📦 数据库管理</h3>
         <p class="text-gray-600 mb-4">
-          所有数据都存储在本地数据库文件中，你可以备份数据到本地，或者从备份文件恢复数据。
+          所有数据存储在手机本地，无需网络。你可以导入已有的 <code class="bg-gray-100 px-1 rounded">exam.db</code> 数据库文件，或备份当前数据。
         </p>
-        
-        <div class="flex gap-4 flex-wrap items-center">
-          <button 
+
+        <div class="flex gap-4 flex-wrap items-center mb-4">
+          <button
             @click="handleBackup"
             class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
           >
-            📥 备份数据
+            📥 导出数据库
           </button>
-          
+
           <label class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition cursor-pointer">
-            📤 恢复数据
-            <input 
-              type="file" 
-              class="hidden" 
+            📤 导入数据库
+            <input
+              type="file"
+              class="hidden"
               @change="handleRestore"
               accept=".db"
             />
           </label>
         </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4">📚 导入题库</h3>
         <div class="mt-6 flex flex-col md:flex-row md:items-center gap-3">
           <label class="inline-flex items-center px-6 py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition cursor-pointer">
             📚 预览导入题库

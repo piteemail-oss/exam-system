@@ -1,57 +1,80 @@
-import axios from 'axios'
+import {
+  initDatabase,
+  createCategory as dbCreateCategory,
+  getCategories as dbGetCategories,
+  deleteCategory as dbDeleteCategory,
+  createQuestion as dbCreateQuestion,
+  getQuestionsByCategory,
+  getWrongQuestions as dbGetWrongQuestions,
+  cutWrongQuestion as dbCutWrongQuestion,
+  cutWrongQuestionByQuestionId as dbCutWrongQuestionByQuestionId,
+  submitExam as dbSubmitExam,
+  exportDatabase,
+  importDatabase,
+  previewImport,
+  importQuestions as dbImportQuestions
+} from '../db/database.js'
 
-const api = axios.create({
-  baseURL: '/api'
-})
+// 确保数据库已初始化
+let dbReady = initDatabase()
+
+// 包装函数：让返回值兼容 axios 的 res.data 格式
+function wrap(fn) {
+  return async (...args) => {
+    await dbReady
+    const data = await fn(...args)
+    return { data }
+  }
+}
 
 // Category APIs
-export const getCategories = () => api.get('/categories/')
-export const createCategory = (data) => api.post('/categories/', data)
-export const deleteCategory = (id) => api.delete(`/categories/${id}`)
+export const getCategories = wrap(dbGetCategories)
+export const createCategory = wrap((name) => dbCreateCategory(name.name || name))
+export const deleteCategory = wrap(dbDeleteCategory)
 
 // Question APIs
-export const createQuestion = (data) => api.post('/questions/', data)
-export const getQuestions = (categoryId, random = false, limit = null) => {
-  const params = { random }
-  if (limit) params.limit = limit
-  return api.get(`/questions/${categoryId}`, { params })
-}
+export const createQuestion = wrap(dbCreateQuestion)
+export const getQuestions = wrap((categoryId, random = false, limit = null) =>
+  getQuestionsByCategory(categoryId, random, limit)
+)
 
 // Wrong Question APIs
-export const getWrongQuestions = (categoryId = null, random = false, limit = null) => {
-  const params = { random }
-  if (categoryId) params.category_id = categoryId
-  if (limit) params.limit = limit
-  return api.get('/wrong-questions/', { params })
-}
-export const cutWrongQuestion = (wrongId) => api.post(`/wrong-questions/${wrongId}/cut/`)
-export const cutWrongQuestionByQuestionId = (questionId) => api.post(`/wrong-questions/question/${questionId}/cut/`)
+export const getWrongQuestions = wrap((categoryId = null, random = false, limit = null) =>
+  dbGetWrongQuestions(categoryId, random, limit)
+)
+export const cutWrongQuestion = wrap(dbCutWrongQuestion)
+export const cutWrongQuestionByQuestionId = wrap(dbCutWrongQuestionByQuestionId)
 
 // Exam APIs
-export const submitExam = (data) => api.post('/exam/submit/', data)
+export const submitExam = wrap(dbSubmitExam)
 
-// Backup and Restore
-export const backupDatabase = () => api.get('/backup/', { responseType: 'blob' })
-export const restoreDatabase = (file) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  return api.post('/restore/', formData)
+// Backup and Restore (文件操作需要特殊处理)
+export const backupDatabase = async () => {
+  await dbReady
+  const data = exportDatabase()
+  if (!data) throw new Error('数据库未初始化')
+  const blob = new Blob([data], { type: 'application/octet-stream' })
+  return { data: blob }
 }
 
-export const importQuestions = (file) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  return api.post('/questions/import/', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+export const restoreDatabase = async (file) => {
+  await dbReady
+  const buffer = await file.arrayBuffer()
+  await importDatabase(buffer)
+  return { data: { success: true } }
 }
 
-export const previewImportQuestions = (file) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  return api.post('/questions/import/preview/', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+// Import
+export const importQuestions = async (file) => {
+  await dbReady
+  const data = await dbImportQuestions(file)
+  return { data }
 }
 
-export default api
+export const previewImportQuestions = async (file) => {
+  await dbReady
+  const data = await previewImport(file)
+  return { data }
+}
+
+export default { backupDatabase, restoreDatabase }
