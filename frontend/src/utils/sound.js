@@ -10,34 +10,43 @@ function getCtx() {
 export function playCorrectSound() {
   try {
     const ctx = getCtx()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(400, ctx.currentTime)
-    osc.frequency.setValueAtTime(300, ctx.currentTime + 0.2)
-    gain.gain.setValueAtTime(0.2, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.5)
+    const now = ctx.currentTime
+
+    // 清脆的 "叮咚" — 两个短促的三角波
+    const notes = [880, 1100] // A5 → C#6
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0, now + i * 0.08)
+      gain.gain.linearRampToValueAtTime(0.25, now + i * 0.08 + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + i * 0.08)
+      osc.stop(now + i * 0.08 + 0.2)
+    })
   } catch {}
 }
 
 export function playWrongSound() {
   try {
     const ctx = getCtx()
+    const now = ctx.currentTime
+
+    // 柔和的 "嘟" — 低频短音
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.value = 260 // C4
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.2, now + 0.03)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35)
     osc.connect(gain)
     gain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(660, ctx.currentTime)
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15)
-    gain.gain.setValueAtTime(0.3, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.3)
+    osc.start(now)
+    osc.stop(now + 0.35)
   } catch {}
 }
 
