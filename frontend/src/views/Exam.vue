@@ -7,7 +7,7 @@
           ← 返回
         </button>
         <div class="flex items-center gap-3">
-          <div v-if="isExamMode && examDuration > 0" class="flex items-center gap-2">
+          <div v-if="isExamMode && examDuration > 0 && !examSubmitted" class="flex items-center gap-2">
             <span class="text-lg font-mono font-bold" :class="examTimeLeft <= 60 ? 'text-red-500' : 'text-gray-700'">{{ formatTime(examTimeLeft) }}</span>
             <button @click="togglePause" class="text-sm px-2 py-1 rounded" :class="examPaused ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'">
               {{ examPaused ? '继续' : '暂停' }}
@@ -17,7 +17,10 @@
             {{ currentIndex + 1 }} / {{ questions.length }}
           </div>
         </div>
-        <button @click="handleSubmit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+        <button v-if="examSubmitted" @click="handleExitExam" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+          退出
+        </button>
+        <button v-else @click="handleSubmit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
           交卷
         </button>
       </div>
@@ -151,6 +154,7 @@
 
           <div class="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <button
+              v-if="!(isExamMode && !isExamFlashcard)"
               @click="handleCheckAnswer(q)"
               :disabled="questionStatus[q.id]?.attempted || !hasSelectedAnswer(q)"
               class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
@@ -165,8 +169,8 @@
           </div>
         </template>
 
-        <!-- 交卷后显示解析 -->
-        <div v-if="submitted" class="mt-6 p-4 rounded-lg" :class="userAnswers[q.id] === q.correct_answer ? 'bg-green-50' : 'bg-red-50'">
+        <!-- 交卷/考试提交后显示解析 -->
+        <div v-if="submitted || examSubmitted" class="mt-6 p-4 rounded-lg" :class="userAnswers[q.id] === q.correct_answer ? 'bg-green-50' : 'bg-red-50'">
           <div class="font-medium mb-2">
             {{ userAnswers[q.id] === q.correct_answer ? '✅ 回答正确' : '❌ 回答错误' }}
           </div>
@@ -182,7 +186,7 @@
       </div>
 
       <!-- 底部导航（闪卡模式隐藏） -->
-      <div v-if="!submitted && !flashcardEnabled" class="mt-6 flex justify-between">
+      <div v-if="(!submitted || examSubmitted) && !flashcardEnabled" class="mt-6 flex justify-between">
         <button
           @click="prevQuestion"
           :disabled="currentIndex === 0"
@@ -201,7 +205,7 @@
 
       <!-- 解析：放在底部导航下方（闪卡模式不重复显示） -->
       <div v-if="!flashcardEnabled" v-for="(q, index) in questions" :key="'a'+q.id" v-show="currentIndex === index">
-        <div v-if="questionStatus[q.id]?.attempted && q.analysis" class="mt-4 text-base text-gray-700 bg-gray-50 rounded-lg p-3">
+        <div v-if="(questionStatus[q.id]?.attempted || examSubmitted) && q.analysis" class="mt-4 text-base text-gray-700 bg-gray-50 rounded-lg p-3">
           解析：{{ q.analysis }}
         </div>
       </div>
@@ -329,6 +333,22 @@ const togglePause = () => {
   saveExamState()
 }
 
+const getExamSubmitData = () => {
+  const answers = questions.value
+    .filter(q => hasSelectedAnswer(q))
+    .map(q => ({
+      question_id: q.id,
+      user_answer: Array.isArray(userAnswers.value[q.id])
+        ? userAnswers.value[q.id].sort().join(',')
+        : (userAnswers.value[q.id] || '')
+    }))
+  return {
+    category_id: parseInt(props.categoryId) || 0,
+    is_wrong_mode: 0,
+    answers
+  }
+}
+
 const formatTime = (s) => {
   const m = Math.floor(s / 60)
   const sec = s % 60
@@ -342,6 +362,7 @@ const userAnswers = ref({})
 const questionStatus = ref({})
 const submitted = ref(false)
 const showResult = ref(false)
+const examSubmitted = ref(false)
 const result = ref({})
 const touchStartX = ref(0)
 const touchStartY = ref(0)
@@ -605,9 +626,7 @@ const markForgot = async () => {
   saveProgress()
   const data = { category_id: q.category_id || parseInt(props.categoryId) || 0, is_wrong_mode: props.isWrongMode ? 1 : 0, answers: [{ question_id: q.id, user_answer: 'WRONG' }] }
   await submitExam(data)
-  if (currentIndex.value >= questions.value.length - 1) {
-    handleFlashcardSubmit()
-  } else {
+  if (currentIndex.value < questions.value.length - 1) {
     nextQuestion()
   }
 }
@@ -621,9 +640,7 @@ const markRemembered = async () => {
   userAnswers.value[q.id] = q.correct_answer
   saveProgress()
   await cutWrongQuestionByQuestionId(q.id)
-  if (currentIndex.value >= questions.value.length - 1) {
-    handleFlashcardSubmit()
-  } else {
+  if (currentIndex.value < questions.value.length - 1) {
     nextQuestion()
   }
 }
@@ -644,6 +661,11 @@ const undoMark = async () => {
   }
   lastMarked.value = null
   saveProgress()
+}
+
+const handleExitExam = () => {
+  clearExamState()
+  router.push('/')
 }
 
 const handleFlashcardSubmit = () => {
@@ -753,6 +775,21 @@ const handleSubmit = async () => {
   }
   if (isExamMode.value) {
     stopTimer()
+    // 考试模式：先不退出，展示答案供浏览
+    if (!isExamFlashcard.value) {
+      // 普通考试模式：提交后仍可浏览
+      try { await submitExam({...getExamSubmitData()}) } catch {}
+      examSubmitted.value = true
+      // 标记所有已回答的题为 attempted
+      for (const q of questions.value) {
+        if (hasSelectedAnswer(q) && !questionStatus.value[q.id]?.attempted) {
+          const correct = normalizeAnswer(userAnswers.value[q.id]) === normalizeAnswer(q.correct_answer)
+          questionStatus.value[q.id] = { attempted: true, correct }
+        }
+      }
+      saveExamState()
+      return
+    }
     clearExamState()
   }
   // 检查未答题
@@ -803,6 +840,10 @@ const handleCutQuestion = async (wrongId) => {
 }
 
 const handleBack = async () => {
+  if (examSubmitted.value) {
+    handleExitExam()
+    return
+  }
   if (isExamMode.value) {
     saveExamState()
     stopTimer()
