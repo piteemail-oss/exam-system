@@ -6,8 +6,16 @@
         <button @click="handleBack" class="text-gray-600 hover:text-gray-900">
           ← 返回
         </button>
-        <div class="text-lg font-medium">
-          {{ currentIndex + 1 }} / {{ questions.length }}
+        <div class="flex items-center gap-3">
+          <div v-if="isExamMode && examDuration > 0" class="flex items-center gap-2">
+            <span class="text-lg font-mono font-bold" :class="examTimeLeft <= 60 ? 'text-red-500' : 'text-gray-700'">{{ formatTime(examTimeLeft) }}</span>
+            <button @click="togglePause" class="text-sm px-2 py-1 rounded" :class="examPaused ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'">
+              {{ examPaused ? '继续' : '暂停' }}
+            </button>
+          </div>
+          <div class="text-lg font-medium">
+            {{ currentIndex + 1 }} / {{ questions.length }}
+          </div>
         </div>
         <button @click="handleSubmit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
           交卷
@@ -107,8 +115,8 @@
               解析：{{ q.analysis }}
             </div>
             <div class="mt-4 flex gap-3 justify-center flex-wrap">
-              <button @click="markForgot()" class="px-8 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">没记住</button>
-              <button @click="markRemembered()" class="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">记住了</button>
+              <button @click="markForgot()" :disabled="isExamMode && questionStatus[q.id]?.attempted" class="px-8 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition disabled:opacity-40 disabled:cursor-not-allowed">没记住</button>
+              <button @click="markRemembered()" :disabled="isExamMode && questionStatus[q.id]?.attempted" class="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition disabled:opacity-40 disabled:cursor-not-allowed">记住了</button>
             </div>
           </template>
         </template>
@@ -230,6 +238,7 @@ import { playCorrectSound, playWrongSound, getSoundEnabled } from '../utils/soun
 
 const props = defineProps(['categoryId', 'isWrongMode'])
 const flashcardEnabled = computed(() => {
+  if (isExamMode.value) return isExamFlashcard.value
   return localStorage.getItem('flashcard_' + props.categoryId) === '1'
 })
 const flipped = ref({})
@@ -238,6 +247,93 @@ const flashcardForgot = ref(0)
 const lastMarked = ref(null)
 const router = useRouter()
 const route = useRoute()
+
+// ==================== 考试模式 ====================
+const isExamMode = computed(() => route.query.exam === '1')
+const isExamFlashcard = computed(() => route.query.flashcard === '1')
+const examDuration = computed(() => parseInt(route.query.duration) || 0)
+const examLimit = computed(() => parseInt(route.query.limit) || 0)
+const examTimeLeft = ref(0)
+const examPaused = ref(false)
+let examTimer = null
+
+const examProgressKey = computed(() => `exam_state_${props.categoryId}`)
+
+const saveExamState = () => {
+  if (!isExamMode.value || submitted.value) return
+  localStorage.setItem(examProgressKey.value, JSON.stringify({
+    timeLeft: examTimeLeft.value,
+    paused: examPaused.value,
+    categoryId: props.categoryId,
+    duration: examDuration.value,
+    limit: examLimit.value,
+    flashcard: isExamFlashcard.value,
+    currentIndex: currentIndex.value,
+    userAnswers: userAnswers.value,
+    questionStatus: questionStatus.value,
+    questions: questions.value,
+    flipped: flipped.value,
+    flashcardRemembered: flashcardRemembered.value,
+    flashcardForgot: flashcardForgot.value
+  }))
+}
+
+const loadExamState = () => {
+  try {
+    const raw = localStorage.getItem(examProgressKey.value)
+    if (!raw) return false
+    const state = JSON.parse(raw)
+    if (state.categoryId != props.categoryId) return false
+    examTimeLeft.value = state.timeLeft || 0
+    examPaused.value = state.paused || false
+    questions.value = state.questions || []
+    currentIndex.value = state.currentIndex || 0
+    userAnswers.value = state.userAnswers || {}
+    questionStatus.value = state.questionStatus || {}
+    flipped.value = state.flipped || {}
+    flashcardRemembered.value = state.flashcardRemembered || 0
+    flashcardForgot.value = state.flashcardForgot || 0
+    if (!examPaused.value && examTimeLeft.value > 0) startTimer()
+    return true
+  } catch { return false }
+}
+
+const clearExamState = () => {
+  localStorage.removeItem(examProgressKey.value)
+}
+
+const startTimer = () => {
+  stopTimer()
+  examTimer = setInterval(() => {
+    if (examPaused.value) return
+    if (examTimeLeft.value <= 0) {
+      stopTimer()
+      handleFlashcardSubmit()
+      return
+    }
+    examTimeLeft.value--
+    if (examTimeLeft.value <= 0) {
+      stopTimer()
+      handleFlashcardSubmit()
+    }
+  }, 1000)
+}
+
+const stopTimer = () => {
+  if (examTimer) { clearInterval(examTimer); examTimer = null }
+}
+
+const togglePause = () => {
+  examPaused.value = !examPaused.value
+  if (!examPaused.value && examTimeLeft.value > 0) startTimer()
+  saveExamState()
+}
+
+const formatTime = (s) => {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
 
 const questions = ref([])
 const currentIndex = ref(0)
@@ -323,26 +419,35 @@ const clearProgress = () => {
 
 const loadQuestions = async () => {
   try {
+    // 考试模式：恢复考试状态
+    if (isExamMode.value) {
+      if (loadExamState()) return
+      clearExamState()
+    }
     if (props.isWrongMode) {
       clearProgress()
-    } else if (loadProgress()) {
+    } else if (!isExamMode.value && loadProgress()) {
       return
     }
 
     let res
     if (props.isWrongMode) {
-      // 错题模式
       const categoryId = props.categoryId ? parseInt(props.categoryId) : null
       res = await getWrongQuestions(categoryId, true)
-      // 把错题的id存起来，用于斩题
       questions.value = res.data.map(wq => ({
         ...wq.question,
         wrongId: wq.id
       }))
     } else {
-      // 常规模式
-      res = await getQuestions(parseInt(props.categoryId), true)
+      const limit = examLimit.value || null
+      res = await getQuestions(parseInt(props.categoryId), true, limit)
       questions.value = res.data
+    }
+
+    // 考试模式：初始化计时器
+    if (isExamMode.value && examDuration.value > 0) {
+      examTimeLeft.value = examDuration.value * 60
+      startTimer()
     }
 
     if (questions.value.length === 0) {
@@ -469,16 +574,17 @@ const handleCheckAnswer = async (q) => {
   if (getSoundEnabled()) {
     correct ? playCorrectSound() : playWrongSound()
   }
-  // 错误答案立即写入错题集
-  if (!correct) {
-    const answerStr = Array.isArray(userAnswers.value[q.id])
-      ? userAnswers.value[q.id].sort().join(',')
-      : userAnswers.value[q.id]
-    const data = { category_id: q.category_id || parseInt(props.categoryId) || 0, is_wrong_mode: props.isWrongMode ? 1 : 0, answers: [{ question_id: q.id, user_answer: answerStr }] }
-    try { await submitExam(data) } catch {}
-  } else {
-    // 答对则从错题集移除
-    try { await cutWrongQuestionByQuestionId(q.id) } catch {}
+  // 错误答案立即写入错题集（考试模式除外）
+  if (!isExamMode.value) {
+    if (!correct) {
+      const answerStr = Array.isArray(userAnswers.value[q.id])
+        ? userAnswers.value[q.id].sort().join(',')
+        : userAnswers.value[q.id]
+      const data = { category_id: q.category_id || parseInt(props.categoryId) || 0, is_wrong_mode: props.isWrongMode ? 1 : 0, answers: [{ question_id: q.id, user_answer: answerStr }] }
+      try { await submitExam(data) } catch {}
+    } else {
+      try { await cutWrongQuestionByQuestionId(q.id) } catch {}
+    }
   }
   lastSavedIndex.value = currentIndex.value
   saveProgress()
@@ -552,7 +658,12 @@ const handleFlashcardSubmit = () => {
   submitted.value = true
   showResult.value = true
   flipped.value = {}
-  clearProgress()
+  stopTimer()
+  if (isExamMode.value) {
+    clearExamState()
+  } else {
+    clearProgress()
+  }
 }
 
 const handleKeydown = (e) => {
@@ -636,8 +747,13 @@ const cleanupCorrectWrongQuestions = async () => {
 
 const handleSubmit = async () => {
   if (flashcardEnabled.value) {
+    stopTimer()
     handleFlashcardSubmit()
     return
+  }
+  if (isExamMode.value) {
+    stopTimer()
+    clearExamState()
   }
   // 检查未答题
   const unanswered = questions.value.filter(q => !hasSelectedAnswer(q))
@@ -687,6 +803,12 @@ const handleCutQuestion = async (wrongId) => {
 }
 
 const handleBack = async () => {
+  if (isExamMode.value) {
+    saveExamState()
+    stopTimer()
+    router.push('/')
+    return
+  }
   saveProgress()
   await cleanupCorrectWrongQuestions()
   router.push('/')
@@ -699,7 +821,12 @@ onMounted(() => {
 
 onUnmounted(async () => {
   document.removeEventListener('keydown', handleKeydown)
-  saveProgress()
-  await cleanupCorrectWrongQuestions()
+  stopTimer()
+  if (isExamMode.value) {
+    if (!submitted.value) saveExamState()
+  } else {
+    saveProgress()
+    await cleanupCorrectWrongQuestions()
+  }
 })
 </script>

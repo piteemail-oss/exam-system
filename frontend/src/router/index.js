@@ -4,6 +4,7 @@ import QuestionEdit from '../views/QuestionEdit.vue'
 import Exam from '../views/Exam.vue'
 import WrongQuestions from '../views/WrongQuestions.vue'
 import Settings from '../views/Settings.vue'
+import ExamSetup from '../views/ExamSetup.vue'
 
 const routes = [
   {
@@ -20,7 +21,7 @@ const routes = [
     path: '/exam/:categoryId',
     name: 'Exam',
     component: Exam,
-    props: route => ({ isWrongMode: false, ...route.params })
+    props: route => ({ isWrongMode: false, categoryId: route.params.categoryId })
   },
   {
     path: '/wrong-exam/:categoryId?',
@@ -33,6 +34,11 @@ const routes = [
     name: 'WrongQuestions',
     component: WrongQuestions,
     props: true
+  },
+  {
+    path: '/exam-setup',
+    name: 'ExamSetup',
+    component: ExamSetup
   },
   {
     path: '/settings',

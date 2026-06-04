@@ -4,6 +4,9 @@
       <div class="flex justify-between items-center mb-8">
         <h1 class="text-3xl font-bold text-gray-900">考试问答系统</h1>
         <div class="flex gap-2">
+          <router-link to="/exam-setup" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+            考试
+          </router-link>
           <router-link to="/settings" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
             设置
           </router-link>
