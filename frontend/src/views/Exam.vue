@@ -203,9 +203,9 @@
         </button>
       </div>
 
-      <!-- 解析：放在底部导航下方（闪卡模式不重复显示） -->
-      <div v-if="!flashcardEnabled" v-for="(q, index) in questions" :key="'a'+q.id" v-show="currentIndex === index">
-        <div v-if="(questionStatus[q.id]?.attempted || examSubmitted) && q.analysis" class="mt-4 text-base text-gray-700 bg-gray-50 rounded-lg p-3">
+      <!-- 解析：放在底部导航下方（闪卡/考试已提交不重复显示） -->
+      <div v-if="!flashcardEnabled && !examSubmitted" v-for="(q, index) in questions" :key="'a'+q.id" v-show="currentIndex === index">
+        <div v-if="questionStatus[q.id]?.attempted && q.analysis" class="mt-4 text-base text-gray-700 bg-gray-50 rounded-lg p-3">
           解析：{{ q.analysis }}
         </div>
       </div>
@@ -264,7 +264,7 @@ let examTimer = null
 const examProgressKey = computed(() => `exam_state_${props.categoryId}`)
 
 const saveExamState = () => {
-  if (!isExamMode.value || submitted.value) return
+  if (!isExamMode.value) return
   localStorage.setItem(examProgressKey.value, JSON.stringify({
     timeLeft: examTimeLeft.value,
     paused: examPaused.value,
@@ -278,7 +278,8 @@ const saveExamState = () => {
     questions: questions.value,
     flipped: flipped.value,
     flashcardRemembered: flashcardRemembered.value,
-    flashcardForgot: flashcardForgot.value
+    flashcardForgot: flashcardForgot.value,
+    submitted: submitted.value || examSubmitted.value
   }))
 }
 
@@ -297,7 +298,8 @@ const loadExamState = () => {
     flipped.value = state.flipped || {}
     flashcardRemembered.value = state.flashcardRemembered || 0
     flashcardForgot.value = state.flashcardForgot || 0
-    if (!examPaused.value && examTimeLeft.value > 0) startTimer()
+    if (state.submitted) examSubmitted.value = true
+    if (!examPaused.value && examTimeLeft.value > 0 && !examSubmitted.value) startTimer()
     return true
   } catch { return false }
 }
@@ -664,6 +666,7 @@ const undoMark = async () => {
 }
 
 const handleExitExam = () => {
+  if (!confirm('确定要退出考试吗？退出后本次考试记录将清除。')) return
   clearExamState()
   router.push('/')
 }
@@ -768,6 +771,9 @@ const cleanupCorrectWrongQuestions = async () => {
 }
 
 const handleSubmit = async () => {
+  if (isExamMode.value && !examSubmitted.value) {
+    if (!confirm('确定要交卷吗？交卷后可查看答案，但不能再修改。')) return
+  }
   if (flashcardEnabled.value) {
     stopTimer()
     handleFlashcardSubmit()
@@ -790,7 +796,6 @@ const handleSubmit = async () => {
       saveExamState()
       return
     }
-    clearExamState()
   }
   // 检查未答题
   const unanswered = questions.value.filter(q => !hasSelectedAnswer(q))
