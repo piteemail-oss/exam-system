@@ -27,6 +27,18 @@
               下载导入模板
             </button>
           </div>
+          <div class="text-sm text-gray-500 mt-6 space-y-2 text-left">
+            <p>支持 CSV / XLSX 文件。字段说明如下：</p>
+            <ul class="list-disc list-inside space-y-1">
+              <li><strong>category_name</strong>：科目名称，若该科目不存在会自动创建。</li>
+              <li><strong>category_id</strong>：可选，优先使用该科目 ID；未填写时按 category_name 匹配。</li>
+              <li><strong>type</strong>：题型，1=单选，2=多选，3=判断。</li>
+              <li><strong>content</strong>：题干文本。</li>
+              <li><strong>option_A ~ option_F</strong>：选项内容，多选题可填写多个选项，判断题可不填。</li>
+              <li><strong>correct_answer</strong>：标准答案，单选/判断写 A，多个答案写 A,C。</li>
+              <li><strong>analysis</strong>：解析说明，可选。</li>
+            </ul>
+          </div>
         </div>
 
         <!-- 预览结果 -->
