@@ -683,12 +683,13 @@ const handleFlashcardSubmit = () => {
   }
   submitted.value = true
   showResult.value = true
-  flipped.value = {}
   stopTimer()
   if (isExamMode.value) {
     examSubmitted.value = true
+    // 保持翻转状态，不清空
     saveExamState()
   } else {
+    flipped.value = {}
     clearProgress()
   }
 }
@@ -884,14 +885,14 @@ onMounted(() => {
   }
 })
 
-const handleExamPopstate = () => {
-  if (isExamMode.value && !examSubmitted.value) {
-    saveExamState()
-    stopTimer()
-  }
+const handleExamPopstate = (e) => {
   if (examSubmitted.value) {
     handleExitExam()
+    return
   }
+  // 阻止后退：重新推入状态
+  history.pushState(null, '', location.href)
+  saveExamState()
 }
 
 onUnmounted(async () => {
