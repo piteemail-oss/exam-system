@@ -341,6 +341,37 @@ export async function importDatabase(buffer) {
   return true
 }
 
+// ==================== 导出题目 CSV ====================
+
+export function exportQuestionsCSV(categoryId) {
+  const questions = getQuestionsByCategory(categoryId, false, null)
+  const category = db.exec('SELECT name FROM category WHERE id = ?', [categoryId])
+  const catName = rowToObject(category)[0]?.name || 'unknown'
+
+  const headers = ['category_name', 'type', 'content', 'option_A', 'option_B', 'option_C', 'option_D', 'option_E', 'option_F', 'correct_answer', 'analysis']
+  const rows = [headers.join(',')]
+
+  for (const q of questions) {
+    const options = q.options || []
+    const row = [
+      catName,
+      q.type,
+      q.content,
+      options.find(o => o.alias === 'A')?.text || '',
+      options.find(o => o.alias === 'B')?.text || '',
+      options.find(o => o.alias === 'C')?.text || '',
+      options.find(o => o.alias === 'D')?.text || '',
+      options.find(o => o.alias === 'E')?.text || '',
+      options.find(o => o.alias === 'F')?.text || '',
+      q.correct_answer,
+      q.analysis || ''
+    ]
+    rows.push(row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+  }
+
+  return rows.join('\n')
+}
+
 // ==================== CSV/XLSX 导入 ====================
 
 export async function previewImport(file) {

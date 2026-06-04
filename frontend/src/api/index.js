@@ -12,7 +12,8 @@ import {
   exportDatabase,
   importDatabase,
   previewImport,
-  importQuestions as dbImportQuestions
+  importQuestions as dbImportQuestions,
+  exportQuestionsCSV as dbExportQuestionsCSV
 } from '../db/database.js'
 
 // 确保数据库已初始化
@@ -75,6 +76,15 @@ export const previewImportQuestions = async (file) => {
   await dbReady
   const data = await previewImport(file)
   return { data }
+}
+
+// 导出科目题目为 CSV
+export const exportCategoryQuestions = async (categoryId, categoryName) => {
+  await dbReady
+  const csv = dbExportQuestionsCSV(categoryId)
+  const bom = '﻿'
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' })
+  return { data: { blob, filename: `${categoryName}_题库.csv` } }
 }
 
 export default { backupDatabase, restoreDatabase }

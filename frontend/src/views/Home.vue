@@ -63,7 +63,13 @@
             >
               错题本
             </router-link>
-            <button 
+            <button
+              @click="handleExportCategory(cat)"
+              class="min-w-[90px] px-2 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition text-sm"
+            >
+              导出
+            </button>
+            <button
               @click="handleDeleteCategory(cat)"
               class="min-w-[90px] px-2 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm"
             >
@@ -95,7 +101,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getCategories, createCategory, deleteCategory } from '../api'
+import { getCategories, createCategory, deleteCategory, exportCategoryQuestions } from '../api'
 
 const categories = ref([])
 const showCreateModal = ref(false)
@@ -122,6 +128,22 @@ const handleDeleteCategory = async (cat) => {
   if (!confirm(`确定要删除科目「${cat.name}」吗？这将删除该科目下的所有题目和记录，无法恢复。`)) return
   await deleteCategory(cat.id)
   await loadCategories()
+}
+
+const handleExportCategory = async (cat) => {
+  try {
+    const res = await exportCategoryQuestions(cat.id, cat.name)
+    const url = window.URL.createObjectURL(res.data.blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', res.data.filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('导出失败：' + (e.message || e))
+  }
 }
 
 const getProgressKey = (categoryId, isWrongMode) => {
