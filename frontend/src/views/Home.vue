@@ -42,7 +42,7 @@
         </div>
 
         <!-- 预览结果 -->
-        <div v-if="previewReady" class="bg-white rounded-xl shadow-sm p-6 mt-6">
+        <div v-if="previewReady" ref="previewRef" class="bg-white rounded-xl shadow-sm p-6 mt-6">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div class="text-sm font-medium text-slate-700">导入预览</div>
@@ -160,13 +160,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { getCategories, deleteCategory, previewImportQuestions, importQuestions } from '../api'
 
 const categories = ref([])
 const importFile = ref(null)
 const importing = ref(false)
 const previewReady = ref(false)
+const previewRef = ref(null)
 const previewRows = ref([])
 const previewErrors = ref([])
 const validCount = ref(0)
@@ -197,6 +198,8 @@ const handlePreview = async (e) => {
     previewErrors.value = data.errors || []
     previewReady.value = true
     e.target.value = ''
+    await nextTick()
+    previewRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   } catch (err) {
     previewReady.value = false
     alert('预览失败：' + (err.message || err))
