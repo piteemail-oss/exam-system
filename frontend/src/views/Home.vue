@@ -266,6 +266,14 @@ const downloadTemplate = () => {
     option_A: '秦始皇', option_B: '汉高祖', option_C: '唐太宗', option_D: '宋太祖',
     option_E: '', option_F: '', correct_answer: 'A', analysis: '秦始皇统一六国'
   }, {
+    category_name: '政治', category_id: '', type: '2', content: '以下哪些是基本经济制度？',
+    option_A: '公有制', option_B: '私有制', option_C: '计划经济', option_D: '市场经济',
+    option_E: '', option_F: '', correct_answer: 'A,B,D', analysis: '多种所有制经济共同发展'
+  }, {
+    category_name: '行测', category_id: '', type: '3', content: '"天下为公"正确吗？',
+    option_A: '对', option_B: '错', option_C: '', option_D: '',
+    option_E: '', option_F: '', correct_answer: 'A', analysis: '这是正确说法'
+  }, {
     category_name: '历史', category_id: '', type: '4', content: '简述秦始皇统一六国的意义。',
     option_A: '结束了长期分裂割据，建立了中国历史上第一个统一的多民族中央集权国家。', option_B: '', option_C: '', option_D: '',
     option_E: '', option_F: '', correct_answer: 'A', analysis: '从政治、经济、文化三方面作答'
