@@ -24,7 +24,7 @@
             <div class="flex items-center gap-3">
               <span class="w-6 h-6 bg-gray-100 text-gray-500 text-xs rounded-full flex items-center justify-center">{{ index + 1 }}</span>
               <span class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded">
-                错误 {{ wq.wrong_count }} 次
+                连续错误 {{ wq.wrong_count }} 次
               </span>
             </div>
             <button 

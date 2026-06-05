@@ -57,38 +57,47 @@
       </div>
     </div>
     <!-- 手机端：可展开答题卡 -->
-    <div class="md:hidden fixed bottom-6 left-0 right-0 z-40" style="padding-bottom: env(safe-area-inset-bottom, 0px)">
-      <div v-if="!showAnswerSheet" class="flex justify-center">
+    <div class="md:hidden fixed left-0 right-0 z-40" :class="showAnswerSheet ? 'bottom-0' : 'bottom-0'">
+      <!-- 关闭状态：悬浮按钮 -->
+      <div v-if="!showAnswerSheet" class="flex justify-center" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px))">
         <button
           @click="showAnswerSheet = true"
-          class="px-4 py-2 bg-white shadow-lg rounded-t-xl text-sm text-gray-600"
+          class="px-5 py-2.5 bg-white shadow-lg rounded-full text-sm font-medium text-gray-600"
         >
           答题卡 · {{ questions.length }} 题
         </button>
       </div>
-      <div v-else class="bg-white shadow-lg p-3">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-medium text-gray-500">答题卡 · {{ questions.length }} 题</span>
-          <button @click="showAnswerSheet = false" class="text-gray-400 text-lg leading-none">&times;</button>
+      <!-- 打开状态：底部面板 -->
+      <template v-else>
+        <div @click="showAnswerSheet = false" class="fixed inset-0 bg-black/30"></div>
+        <div class="bg-white rounded-t-2xl shadow-2xl relative" style="padding-bottom: env(safe-area-inset-bottom, 0px)">
+          <!-- 拖拽手柄 -->
+          <div class="flex justify-center pt-2 pb-1">
+            <div class="w-10 h-1 bg-gray-300 rounded-full"></div>
+          </div>
+          <div class="flex items-center justify-between px-4 pb-2">
+            <span class="text-sm font-semibold text-gray-700">答题卡 · {{ questions.length }} 题</span>
+            <button @click="showAnswerSheet = false" class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+          </div>
+          <div ref="answerSheetRef" class="grid grid-cols-8 gap-2 px-4 pb-4 max-h-[55vh] overflow-y-auto">
+            <button
+              v-for="(q, index) in questions"
+              :key="q.id"
+              :ref="el => { if (el) answerBtns[index] = el }"
+              @click="currentIndex = index; showAnswerSheet = false"
+              class="h-9 text-sm rounded-lg transition flex items-center justify-center font-medium"
+              :class="{
+                'bg-gray-100 text-gray-600': !userAnswers[q.id] && !questionStatus[q.id]?.attempted,
+                'bg-blue-500 text-white': questionStatus[q.id]?.attempted && questionStatus[q.id].correct,
+                'bg-red-500 text-white': questionStatus[q.id]?.attempted && !questionStatus[q.id].correct,
+                'ring-2 ring-blue-400 ring-offset-1': currentIndex === index
+              }"
+            >
+              {{ index + 1 }}
+            </button>
+          </div>
         </div>
-        <div ref="answerSheetRef" class="grid grid-cols-8 gap-1.5 max-h-60 overflow-y-auto pb-1">
-          <button
-            v-for="(q, index) in questions"
-            :key="q.id"
-            :ref="el => { if (el) answerBtns[index] = el }"
-            @click="currentIndex = index; showAnswerSheet = false"
-            class="h-7 text-xs rounded transition flex items-center justify-center"
-            :class="{
-              'bg-gray-100 text-gray-700': !userAnswers[q.id] && !questionStatus[q.id]?.attempted,
-              'bg-blue-500 text-white': questionStatus[q.id]?.attempted && questionStatus[q.id].correct,
-              'bg-red-500 text-white': questionStatus[q.id]?.attempted && !questionStatus[q.id].correct,
-              'ring-2 ring-blue-400': currentIndex === index
-            }"
-          >
-            {{ index + 1 }}
-          </button>
-        </div>
-      </div>
+      </template>
     </div>
 
     <!-- 答题区域 -->
@@ -100,8 +109,8 @@
         </div>
         <div class="text-sm text-gray-500 mb-6">题型：{{ getQuestionTypeLabel(q.type) }}</div>
 
-        <!-- 闪卡模式 -->
-        <template v-if="flashcardEnabled">
+        <!-- 闪卡模式 / 简答题（始终闪卡） -->
+        <template v-if="flashcardEnabled || q.type === 4">
           <div v-if="!flipped[q.id]" @click="flipCard(q)" class="mt-4 py-12 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition">
             <div class="text-4xl mb-2">🃏</div>
             <div class="text-gray-500">点击翻转查看答案</div>
@@ -170,9 +179,9 @@
         </template>
 
         <!-- 交卷/考试提交后显示解析 -->
-        <div v-if="submitted || examSubmitted" class="mt-6 p-4 rounded-lg" :class="userAnswers[q.id] === q.correct_answer ? 'bg-green-50' : 'bg-red-50'">
+        <div v-if="submitted || examSubmitted" class="mt-6 p-4 rounded-lg" :class="isCurrentAnswerCorrect(q) ? 'bg-green-50' : 'bg-red-50'">
           <div class="font-medium mb-2">
-            {{ userAnswers[q.id] === q.correct_answer ? '✅ 回答正确' : '❌ 回答错误' }}
+            {{ isCurrentAnswerCorrect(q) ? '✅ 回答正确' : '❌ 回答错误' }}
           </div>
           <div class="text-sm text-gray-600">
             你的答案：{{ userAnswers[q.id] || '未作答' }}<br>
@@ -451,6 +460,19 @@ const loadQuestions = async () => {
     if (props.isWrongMode) {
       clearProgress()
     } else if (!isExamMode.value && loadProgress()) {
+      // 检查恢复的题目中是否有已被隐藏的
+      try {
+        const hiddenRes = await getQuestions(parseInt(props.categoryId), false, null, true)
+        const hiddenIds = new Set(hiddenRes.data.filter(q => q.hidden).map(q => q.id))
+        const before = questions.value.length
+        questions.value = questions.value.filter(q => !hiddenIds.has(q.id))
+        if (questions.value.length < before) {
+          if (currentIndex.value >= questions.value.length) {
+            currentIndex.value = Math.max(0, questions.value.length - 1)
+          }
+          saveProgress()
+        }
+      } catch {}
       return
     }
 
@@ -464,7 +486,8 @@ const loadQuestions = async () => {
       }))
     } else {
       const limit = examLimit.value || null
-      res = await getQuestions(parseInt(props.categoryId), true, limit)
+      const random = localStorage.getItem(`sort_order_${props.categoryId}`) === '1'
+      res = await getQuestions(parseInt(props.categoryId), random, limit)
       questions.value = res.data
     }
 
@@ -527,8 +550,10 @@ const normalizeAnswer = (answer) => {
 }
 
 const getQuestionTypeLabel = (type) => {
+  if (type === 1 || type === '1') return '单选题'
   if (type === 2 || type === '2') return '多选题'
   if (type === 3 || type === '3') return '判断题'
+  if (type === 4 || type === '4') return '简答题'
   return '单选题'
 }
 
@@ -598,18 +623,7 @@ const handleCheckAnswer = async (q) => {
   if (getSoundEnabled()) {
     correct ? playCorrectSound() : playWrongSound()
   }
-  // 错误答案立即写入错题集（考试模式除外）
-  if (!isExamMode.value) {
-    if (!correct) {
-      const answerStr = Array.isArray(userAnswers.value[q.id])
-        ? userAnswers.value[q.id].sort().join(',')
-        : userAnswers.value[q.id]
-      const data = { category_id: q.category_id || parseInt(props.categoryId) || 0, is_wrong_mode: props.isWrongMode ? 1 : 0, answers: [{ question_id: q.id, user_answer: answerStr }] }
-      try { await submitExam(data) } catch {}
-    } else {
-      try { await cutWrongQuestionByQuestionId(q.id) } catch {}
-    }
-  }
+  // 错题集统一在交卷时写入，避免重复计数
   lastSavedIndex.value = currentIndex.value
   saveProgress()
 }
@@ -628,7 +642,7 @@ const markForgot = async () => {
   userAnswers.value[q.id] = 'X'
   saveProgress()
   const data = { category_id: q.category_id || parseInt(props.categoryId) || 0, is_wrong_mode: props.isWrongMode ? 1 : 0, answers: [{ question_id: q.id, user_answer: 'WRONG' }] }
-  await submitExam(data)
+  try { await submitExam(data) } catch (e) { console.warn('记录错题失败', e) }
   if (currentIndex.value < questions.value.length - 1) {
     nextQuestion()
   }
@@ -642,7 +656,7 @@ const markRemembered = async () => {
   questionStatus.value[q.id] = { attempted: true, correct: true }
   userAnswers.value[q.id] = q.correct_answer
   saveProgress()
-  await cutWrongQuestionByQuestionId(q.id)
+  try { await cutWrongQuestionByQuestionId(q.id) } catch (e) { console.warn('删除错题失败', e) }
   if (currentIndex.value < questions.value.length - 1) {
     nextQuestion()
   }
@@ -712,7 +726,7 @@ const handleKeydown = (e) => {
       }
     } else {
       // 单选/判断
-      userAnswers.value[currentQ.id] = [key]
+      userAnswers.value[currentQ.id] = key
     }
     saveProgress()
   }
@@ -739,18 +753,8 @@ const getCorrectWrongQuestionIds = () => {
 
 const getCorrectQuestionIds = () => {
   const result = questions.value
-    .filter(q => {
-      const hasAnswer = hasSelectedAnswer(q)
-      const userNorm = normalizeAnswer(userAnswers.value[q.id])
-      const correctNorm = normalizeAnswer(q.correct_answer)
-      const match = userNorm === correctNorm
-      if (hasAnswer) {
-        console.log('[getCorrectQuestionIds] q.id:', q.id, 'type:', q.type, 'userAnswer:', userAnswers.value[q.id], 'correctAnswer:', q.correct_answer, 'userNorm:', userNorm, 'correctNorm:', correctNorm, 'match:', match)
-      }
-      return hasAnswer && match
-    })
+    .filter(q => hasSelectedAnswer(q) && isCurrentAnswerCorrect(q))
     .map(q => q.id)
-  console.log('[getCorrectQuestionIds] 结果:', result)
   return result
 }
 

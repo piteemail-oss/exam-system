@@ -110,6 +110,9 @@ function createTables() {
       analysis TEXT,
       hidden INTEGER NOT NULL DEFAULT 0,
       favorite INTEGER NOT NULL DEFAULT 0,
+      correct_count INTEGER NOT NULL DEFAULT 0,
+      seen_count INTEGER NOT NULL DEFAULT 0,
+      error_weight REAL NOT NULL DEFAULT 0,
       create_time TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     )
   `)
@@ -117,6 +120,11 @@ function createTables() {
   try { db.run('ALTER TABLE question ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0') } catch {}
   // 兼容旧库：添加 favorite 列
   try { db.run('ALTER TABLE question ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0') } catch {}
+  // 兼容旧库：添加 correct_count / seen_count 列
+  try { db.run('ALTER TABLE question ADD COLUMN correct_count INTEGER NOT NULL DEFAULT 0') } catch {}
+  try { db.run('ALTER TABLE question ADD COLUMN seen_count INTEGER NOT NULL DEFAULT 0') } catch {}
+  // 兼容旧库：添加 error_weight 列
+  try { db.run('ALTER TABLE question ADD COLUMN error_weight REAL NOT NULL DEFAULT 0') } catch {}
   db.run(`
     CREATE TABLE IF NOT EXISTS wrongquestion (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,6 +257,11 @@ export async function batchToggleHidden(categoryId, hidden) {
   await saveDatabase()
 }
 
+export async function batchToggleHiddenByType(categoryId, type, hidden) {
+  db.run('UPDATE question SET hidden = ? WHERE category_id = ? AND type = ?', [hidden ? 1 : 0, categoryId, type])
+  await saveDatabase()
+}
+
 // ==================== 题目 CRUD ====================
 
 export async function createQuestion(data) {
@@ -263,14 +276,52 @@ export async function createQuestion(data) {
 }
 
 export function getQuestionsByCategory(categoryId, random = false, limit = null, includeHidden = false) {
-  let sql = 'SELECT * FROM question WHERE category_id = ?'
-  if (!includeHidden) sql += ' AND hidden = 0'
-  if (random) sql += ' ORDER BY RANDOM()'
-  if (limit) sql += ' LIMIT ?'
-  const params = [categoryId]
-  if (limit) params.push(limit)
+  let sql, params
+
+  if (random) {
+    // 加权随机：LEFT JOIN 获取 wrong_count，在 JS 层做指数时钟洗牌
+    sql = `SELECT q.*, COALESCE(wq.wrong_count, 0) AS wrong_count
+           FROM question q
+           LEFT JOIN wrongquestion wq ON q.id = wq.question_id
+           WHERE q.category_id = ?`
+    if (!includeHidden) sql += ' AND q.hidden = 0'
+    params = [categoryId]
+  } else {
+    sql = 'SELECT * FROM question WHERE category_id = ?'
+    if (!includeHidden) sql += ' AND hidden = 0'
+    if (limit) sql += ' LIMIT ?'
+    params = [categoryId]
+    if (limit) params.push(limit)
+  }
+
   const result = db.exec(sql, params)
-  return rowToObject(result).map(r => jsonFields(r, ['options']))
+  let rows = rowToObject(result)
+
+  if (random) {
+    // 指数时钟算法：score = -ln(random) / weight
+    // weight = max(0.2, 1.0 + unseen_bonus + error_weight - correct_count×0.3)
+    // unseen_bonus = seen_count===0 ? 2.5 : 0
+    // 未见过 → 绝对优先，错得多 → 排前，对得多 → 排后
+    // score 越小越靠前（高权重期望更早到达）
+    const weighted = rows.map(q => {
+      const correct = q.correct_count || 0
+      const seen = q.seen_count || 0
+      const error = q.error_weight || 0
+      const unseenBonus = seen === 0 ? 2.5 : 0
+      const weight = Math.max(0.2,
+        1.0 + unseenBonus + error - correct * 0.3
+      )
+      return { ...q, _score: -Math.log(Math.random()) / weight }
+    })
+    weighted.sort((a, b) => a._score - b._score)
+    rows = weighted
+    if (limit) rows = rows.slice(0, limit)
+  }
+
+  return rows.map(r => {
+    const { _score, wrong_count, correct_count, seen_count, error_weight, ...q } = r
+    return jsonFields(q, ['options'])
+  })
 }
 
 // ==================== 错题 CRUD ====================
@@ -373,8 +424,17 @@ export async function submitExam(data) {
       correct++
       // 删除错题记录
       db.run('DELETE FROM wrongquestion WHERE question_id = ?', [ans.question_id])
+      db.run(`UPDATE question SET
+        correct_count = correct_count + 1,
+        seen_count = seen_count + 1,
+        error_weight = MAX(0, error_weight - 0.5)
+        WHERE id = ?`, [ans.question_id])
     } else {
       await updateWrongQuestion(ans.question_id, ans.user_answer, false)
+      db.run(`UPDATE question SET
+        seen_count = seen_count + 1,
+        error_weight = error_weight + 1.0
+        WHERE id = ?`, [ans.question_id])
     }
   }
 
@@ -600,11 +660,11 @@ function parseImportRow(row) {
   const analysis = (row.analysis || '').trim()
 
   if (!categoryName) throw new Error('category_name 必填')
-  if (!typeValue) throw new Error('type 必填，1=单选，2=多选，3=判断')
+  if (!typeValue) throw new Error('type 必填，1=单选，2=多选，3=判断，4=简答')
 
   const questionType = parseInt(typeValue)
-  if (isNaN(questionType) || ![1, 2, 3].includes(questionType)) {
-    throw new Error('type 必须为 1、2 或 3')
+  if (isNaN(questionType) || ![1, 2, 3, 4].includes(questionType)) {
+    throw new Error('type 必须为 1、2、3 或 4')
   }
   if (!content) throw new Error('content 不能为空')
   if (!correctAnswer) throw new Error('correct_answer 不能为空')
@@ -621,6 +681,9 @@ function parseImportRow(row) {
     if (options.length === 0) {
       options.push({ alias: 'A', text: '对' }, { alias: 'B', text: '错' })
     }
+    normalizedAnswer = correctAnswer.toUpperCase()
+  } else if (questionType === 4) {
+    // 简答题：不强制要求至少两个选项
     normalizedAnswer = correctAnswer.toUpperCase()
   } else {
     if (options.length < 2) throw new Error('单选/多选题至少需要两个选项')

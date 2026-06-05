@@ -32,10 +32,10 @@
             <ul class="list-disc list-inside space-y-1">
               <li><strong>category_name</strong>：科目名称，若该科目不存在会自动创建。</li>
               <li><strong>category_id</strong>：可选，优先使用该科目 ID；未填写时按 category_name 匹配。</li>
-              <li><strong>type</strong>：题型，1=单选，2=多选，3=判断。</li>
+              <li><strong>type</strong>：题型，1=单选，2=多选，3=判断，4=简答。</li>
               <li><strong>content</strong>：题干文本。</li>
-              <li><strong>option_A ~ option_F</strong>：选项内容，多选题可填写多个选项，判断题可不填。</li>
-              <li><strong>correct_answer</strong>：标准答案，单选/判断写 A，多个答案写 A,C。</li>
+              <li><strong>option_A ~ option_F</strong>：选项内容，多选题可填写多个选项，判断题填正确和错误两个选型，简答题在 option_A 填写答案。</li>
+              <li><strong>correct_answer</strong>：标准答案，单选/判断/简答写 A，多个答案写 A,C。</li>
               <li><strong>analysis</strong>：解析说明，可选。</li>
             </ul>
           </div>
@@ -265,6 +265,10 @@ const downloadTemplate = () => {
     category_name: '历史', category_id: '', type: '1', content: '中国第一位皇帝是？',
     option_A: '秦始皇', option_B: '汉高祖', option_C: '唐太宗', option_D: '宋太祖',
     option_E: '', option_F: '', correct_answer: 'A', analysis: '秦始皇统一六国'
+  }, {
+    category_name: '历史', category_id: '', type: '4', content: '简述秦始皇统一六国的意义。',
+    option_A: '结束了长期分裂割据，建立了中国历史上第一个统一的多民族中央集权国家。', option_B: '', option_C: '', option_D: '',
+    option_E: '', option_F: '', correct_answer: 'A', analysis: '从政治、经济、文化三方面作答'
   }]
   const csv = arrayToCsv(templateRows)
   const bom = '﻿'

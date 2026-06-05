@@ -8,6 +8,8 @@ import {
   toggleQuestionHidden as dbToggleQuestionHidden,
   toggleFavorite as dbToggleFavorite,
   batchToggleHidden as dbBatchToggleHidden,
+  batchToggleHiddenByType as dbBatchToggleHiddenByType,
+  updateWrongQuestion as dbUpdateWrongQuestion,
   getWrongQuestions as dbGetWrongQuestions,
   cutWrongQuestion as dbCutWrongQuestion,
   cutWrongQuestionByQuestionId as dbCutWrongQuestionByQuestionId,
@@ -45,6 +47,7 @@ export const getQuestions = wrap((categoryId, random = false, limit = null, incl
 export const toggleQuestionHidden = wrap(dbToggleQuestionHidden)
 export const toggleFavorite = wrap(dbToggleFavorite)
 export const batchToggleHidden = wrap(dbBatchToggleHidden)
+export const batchToggleHiddenByType = wrap(dbBatchToggleHiddenByType)
 
 // Wrong Question APIs
 export const getWrongQuestions = wrap((categoryId = null, random = false, limit = null) =>
@@ -52,6 +55,7 @@ export const getWrongQuestions = wrap((categoryId = null, random = false, limit 
 )
 export const cutWrongQuestion = wrap(dbCutWrongQuestion)
 export const cutWrongQuestionByQuestionId = wrap(dbCutWrongQuestionByQuestionId)
+export const recordWrongAnswer = wrap(dbUpdateWrongQuestion)
 export const clearAllWrongQuestions = wrap(dbClearAllWrongQuestions)
 
 // Exam APIs
